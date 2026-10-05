@@ -151,6 +151,37 @@ function wrapSignedData(material: PemMaterial, attrsSet: Uint8Array, signature: 
   return derSeq(OID.idSignedData, tlv(0xa0, signedData));
 }
 
+/** Attached SignedData. A provisioning profile is the plist carried inside the CMS, not a detached signature. */
+export async function buildAttachedCms(material: PemMaterial, content: Uint8Array, date: Date): Promise<Uint8Array> {
+  const digest = await sha256(content);
+  const attrs = derSet([
+    derSeq(OID.attrContentType, derSet([OID.idData])),
+    derSeq(OID.attrMessageDigest, derSet([derOctet(digest)])),
+    derSeq(OID.attrSigningTime, derSet([derUtcTime(date)])),
+  ]);
+  const signature = await signAttributes(material, attrs);
+  const implicitAttrs = new Uint8Array(attrs);
+  implicitAttrs[0] = 0xa0;
+  const digestAlg = derSeq(OID.sha256, derNull());
+  const sigAlg = material.kind === "RSA" ? derSeq(OID.sha256WithRsa, derNull()) : tlv(0x30, OID.ecdsaWithSha256);
+  const signer = derSeq(
+    derSmallInt(1),
+    derSeq(material.leaf.issuerDer, material.leaf.serialDer),
+    digestAlg,
+    implicitAttrs,
+    sigAlg,
+    derOctet(signature),
+  );
+  const signedData = derSeq(
+    derSmallInt(1),
+    derSet([digestAlg]),
+    derSeq(OID.idData, tlv(0xa0, derOctet(content))),
+    tlv(0xa0, concat(...material.chain.map((c) => c.raw))),
+    derSet([signer]),
+  );
+  return derSeq(OID.idSignedData, tlv(0xa0, signedData));
+}
+
 export type CmsCheck = {
   ok: boolean;
   digestMatches: boolean;
