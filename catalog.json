@@ -2,7 +2,7 @@
   {
     "bundleId": "demo.khatm",
     "title": "Third Quintuple Method",
-    "version": "1.0",
+    "version": "1.0.1",
     "manifest": "https://jdjsbdvd7-arch.github.io/Third-Quintuple-Method/pkg/demo.xml",
     "ipa": "https://jdjsbdvd7-arch.github.io/Third-Quintuple-Method/pkg/demo.ipa",
     "device": ""
