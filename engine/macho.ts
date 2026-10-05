@@ -803,6 +803,52 @@ export function synthesizeMachO(opts?: { tight?: boolean }): Uint8Array {
   return out;
 }
 
+/** An arm64 iOS executable. installd rejects a binary that has no platform. */
+export function synthesizeIOSMachO(): Uint8Array {
+  const dyld = "/usr/lib/dyld";
+  const dylinker = new Uint8Array(32);
+  wu32(dylinker, 0, 0x0e, true);
+  wu32(dylinker, 4, 32, true);
+  wu32(dylinker, 8, 12, true);
+  for (let i = 0; i < dyld.length; i++) dylinker[12 + i] = dyld.charCodeAt(i);
+  const build = new Uint8Array(32);
+  wu32(build, 0, LC_BUILD_VERSION, true);
+  wu32(build, 4, 32, true);
+  wu32(build, 8, 2, true);
+  wu32(build, 12, 0x000f0000, true);
+  wu32(build, 16, 0x00120000, true);
+  const pagezero = seg("__PAGEZERO", 0, 0x100000000, 0, 0, 0, 0, 0);
+  const textCmdSize = 72 + 80;
+  const cmds = 72 + textCmdSize + 72 + 24 + 32 + 32;
+  const content = 0x4000;
+  const codeSize = 64;
+  const textFile = content + codeSize;
+  const text = seg("__TEXT", 0x100000000, 0x8000, 0, textFile, 5, 5, 1);
+  const section = section64("__text", "__TEXT", 0x100000000 + content, codeSize, content, 2);
+  const link = seg("__LINKEDIT", 0x100000000 + 0x8000, 0x4000, textFile, 0, 1, 1, 0);
+  const main = new Uint8Array(24);
+  wu32(main, 0, LC_MAIN, true);
+  wu32(main, 4, 24, true);
+  wu64(main, 8, content, true);
+  const header = new Uint8Array(32);
+  wu32(header, 0, MH_MAGIC_64, true);
+  wu32(header, 4, 0x0100000c, true);
+  wu32(header, 12, MH_EXECUTE, true);
+  wu32(header, 16, 6, true);
+  wu32(header, 20, cmds, true);
+  wu32(header, 24, 0x00200085, true);
+  const body = concat(header, pagezero, text, section, link, main, build, dylinker);
+  const out = new Uint8Array(textFile);
+  out.set(body, 0);
+  for (let i = 0; i < codeSize; i += 4) {
+    out[content + i] = 0xc0;
+    out[content + i + 1] = 0x03;
+    out[content + i + 2] = 0x5f;
+    out[content + i + 3] = 0xd6;
+  }
+  return out;
+}
+
 function seg(
   name: string,
   vmaddr: number,
