@@ -275,6 +275,7 @@ export const OID = {
   cn: derOid([2, 5, 4, 3]),
   ou: derOid([2, 5, 4, 11]),
   o: derOid([2, 5, 4, 10]),
+  c: derOid([2, 5, 4, 6]),
 };
 
 export function oidEquals(a: Uint8Array, b: Uint8Array): boolean {

@@ -37,7 +37,9 @@ const PLIST_HEAD = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 `;
 
-export async function assessProfile(bytes: Uint8Array, app: AlignmentInput = {}): Promise<ProfileView> {
+export type TrustStore = { roots: Uint8Array[]; intermediates?: Uint8Array[] };
+
+export async function assessProfile(bytes: Uint8Array, app: AlignmentInput = {}, trust?: TrustStore): Promise<ProfileView> {
   const gates: Gate[] = [];
   const cms = await readCms(bytes);
   gates.push({ id: "PF-CMS-01", ok: cms.ok, detail: cms.ok ? "SignedData" : cms.reason });
@@ -69,7 +71,7 @@ export async function assessProfile(bytes: Uint8Array, app: AlignmentInput = {})
     detail: separated ? "developer certificate is not the profile signer" : "CMS signer and DeveloperCertificates are the same key",
   });
 
-  const chain = signer ? await walkChain(signer, cms.certificates) : { issuerOk: false, anchorOk: false, detail: "no signer" };
+  const chain = signer ? await walkChain(signer, cms.certificates, trust) : { issuerOk: false, anchorOk: false, detail: "no signer" };
   gates.push({ id: "PF-CHAIN-01", ok: chain.issuerOk, detail: chain.detail });
   gates.push({ id: "PF-CHAIN-02", ok: chain.anchorOk, detail: chain.anchorOk ? "trust anchor" : "trust anchor not reached" });
 
@@ -151,9 +153,9 @@ function alignmentGates(
   return gates;
 }
 
-async function walkChain(signer: ParsedCert, bag: ParsedCert[]): Promise<{ issuerOk: boolean; anchorOk: boolean; detail: string }> {
-  const roots = appleAnchors.roots.map((der) => parseCert(der));
-  const extras = appleAnchors.intermediates.map((der) => parseCert(der));
+async function walkChain(signer: ParsedCert, bag: ParsedCert[], trust?: TrustStore): Promise<{ issuerOk: boolean; anchorOk: boolean; detail: string }> {
+  const roots = (trust?.roots ?? appleAnchors.roots).map((der) => parseCert(der));
+  const extras = (trust ? (trust.intermediates ?? []) : appleAnchors.intermediates).map((der) => parseCert(der));
   const pool = [...bag, ...extras, ...roots];
   let current = signer;
   for (let hop = 0; hop < 6; hop++) {
